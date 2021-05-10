@@ -9,15 +9,23 @@ import pandas as pd
 
 import matplotlib.pyplot as plt
 import warnings
-warnings.filterwarnings("error")
+import warnings
+
+
+IGNORE_LIST = ["/home/cehmann/projects/stonks/data/daily/us/nyse stocks/2/zexit.us.txt"]
 #%%
 FILES = list(
     glob.iglob("/home/cehmann/projects/stonks/data/daily/us/nyse stocks/*/*txt")
 )
 
+
 #%%
 def subtract_mean_and_divide_by_std(array):
-    return (array - np.mean(array)) / np.std(array)
+    zero_mean = (array - np.mean(array))
+    std = np.std(array)
+    if std:
+        return zero_mean / np.std(array)
+    return zero_mean
 
 
 class StocksDataset(Dataset):
@@ -37,14 +45,14 @@ class StocksDataset(Dataset):
         for p in files:
             try:
                 d = pd.read_csv(p)
-               
-                if len(d) >= min_length:
-                    print("length",len(d))
-                    self.data.append((p,d[self.column]))
             except Exception as e:
-                print(e)
-                pass
-    
+                print(p,e)
+                continue
+            if len(d) >= min_length:
+                c = d[self.column]
+                self.data.append((p,c))
+
+
     def sample_from(self,d):
 
         start = np.random.randint(low=0,high=len(d)-self.min_length+1)
@@ -58,12 +66,7 @@ class StocksDataset(Dataset):
             sample = d[-self.min_length:]
         array = np.array(sample)
         if self.normalization_func:
-            try:
-
-                array = self.normalization_func(array)
-            except RuntimeWarning as w:
-                print("Failing")
-                print(idx)
+            array = self.normalization_func(array)
 
         return array
 
@@ -71,9 +74,13 @@ class StocksDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        path,sample = self.data[idx]
-        print(path)
-        return self.process_data(sample)
+        path, sample = self.data[idx]
+        try:
+            processed = self.process_data(sample)
+        except RuntimeWarning as w:
+            print("Failing ", path)
+            raise w
+        return processed
 
 
 class RandomWalkDataset(Dataset):
@@ -126,13 +133,16 @@ class RandomWalkDataset(Dataset):
         return array
 
 
+"""
+
 #%%
 print(len(FILES))
 #%%
 dataset = StocksDataset(files=FILES)
 #%%
 for idx, batch in enumerate(dataset):
-    print(idx)
+
+
     pass
 #%%
 ##dataset = RandomWalkDataset()
@@ -144,9 +154,10 @@ for idx, batch in enumerate(dataset):
 #
 #data_loader = DataLoader(dataset, batch_size=4, shuffle=True)
 #
-for idx, batch in enumerate(data_loader):
-    #print(idx,batch.shape)
-    break
+#for idx, batch in enumerate(data_loader):
+#    #print(idx,batch.shape)
+#    break
 ## %%
 
 # %%
+"""
