@@ -133,6 +133,7 @@ class RandomWalkDataset(Dataset):
             array = self.normalization_func(array)
         return array
 
+    
 
 class StocksDataModule(pl.LightningDataModule):
     def __init__(self, files=FILTERED, train_batch_size=64, val_batch_size=64):
@@ -149,10 +150,10 @@ class StocksDataModule(pl.LightningDataModule):
         self.val_split = StocksDataset(files=self.files[-200:-100])
 
     def train_dataloader(self):
-        return DataLoader(self.train_split)
+        return DataLoader(self.train_split, batch_size=self.train_batch_size)
 
     def val_dataloader(self):
-        return DataLoader(self.val_split)
+        return DataLoader(self.val_split, batch_size=self.val_batch_size)
 
     def teardown(self):
         pass
