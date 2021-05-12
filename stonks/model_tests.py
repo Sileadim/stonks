@@ -19,4 +19,5 @@ train_dataloader = DataLoader(train_dataset,batch_size=2,shuffle=False)
 model = Transformer().double()
 for batch in train_dataloader:
 
-    model.training_step(batch.double(),0)
+    model.training_step(batch.double(), 0)
+    break
