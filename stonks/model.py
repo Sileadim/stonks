@@ -27,7 +27,7 @@ class AutoregressiveLstm(pl.LightningModule):
 
     def forward(self, x):
 
-        # seq_length,batch_size,
+        
         batch_size, n_features, length = x.shape
         encoded, _ = self.encoder(x.transpose( 2, 1))
         out = self.linear(encoded).view(batch_size, n_features, length)
@@ -77,13 +77,13 @@ class PositionalEncoding(pl.LightningModule):
 
     def forward(self, x):
 
-        batch_size, length = x.shape
+        batch_size, n_features, length = x.shape
         positional_encodings = (
-            self.pe[:length, : self.hidden_size - 1]
+            self.pe[:length, : self.hidden_size - n_features]
             .view(1, length, -1)
             .repeat(batch_size, 1, 1)
         )
-        x = torch.cat((x.view(batch_size, length, -1), positional_encodings), axis=2)
+        x = torch.cat((x.transpose(2,1), positional_encodings), axis=2)
         # x = torch.cat((x.view(batch_size, length, -1), torch.zeros(length).view(1,length,1).repeat(batch_size,1,self.hidden_size-1).to(self.device)), axis=2)
 
         return x
@@ -103,12 +103,12 @@ class Transformer(pl.LightningModule):
         )
         return mask
 
-    def __init__(self, hidden_size=256, num_layers=1, nhead=8, dim_feedforward=256):
+    def __init__(self, hidden_size=256, num_layers=1, nhead=8, dim_feedforward=256, n_features=5):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-
         self.nhead = nhead
+        self.n_features = n_features
         self.dim_feedforward = dim_feedforward
         self.positional_encoding = PositionalEncoding(
             hidden_size=self.hidden_size
@@ -123,26 +123,26 @@ class Transformer(pl.LightningModule):
         self.transformer_encoder = nn.TransformerEncoder(
             self.encoder_layer, num_layers=num_layers, norm=self.layer_norm
         ).double()
-        self.linear = torch.nn.Linear(self.hidden_size, 1).double()
+        self.linear = torch.nn.Linear(self.hidden_size,self.n_features ).double()
         self.loss_func = torch.nn.MSELoss()
         self.save_hyperparameters()
 
     def forward(self, x):
 
         # seq_length,batch_size,
-        batch_size, length = x.shape
+        batch_size, n_features, length = x.shape
         positionally_encoded = self.positional_encoding(x.double())
         mask = self.generate_square_subsequent_mask(length).to(self.device)
         encoded = self.transformer_encoder(
             positionally_encoded.view(length, batch_size, self.hidden_size), mask=mask
         )
         out = self.linear(encoded)
-        return out.view(batch_size, length, 1).squeeze(-1)
+        return out.view(batch_size, n_features, length)
 
     def training_step(self, batch, batch_idx):
 
-        x = batch[:, 0:-1]
-        y = batch[:, 1:]
+        x = batch[:,:, 0:-1]
+        y = batch[:,:, 1:]
         y_pred = self.forward(x)
         loss = self.loss_func(y, y_pred)
         self.log(
@@ -151,8 +151,8 @@ class Transformer(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x = batch[:, 0:-1]
-        y = batch[:, 1:]
+        x = batch[:,:, 0:-1]
+        y = batch[:,:, 1:]
         y_pred = self.forward(x)
         loss = self.loss_func(y, y_pred)
         self.log(
