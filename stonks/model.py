@@ -140,7 +140,7 @@ class Transformer(pl.LightningModule):
         return out.view(batch_size, n_features, length)
 
     def training_step(self, batch, batch_idx):
-
+        # batchsize, n_features, length
         x = batch[:,:, 0:-1]
         y = batch[:,:, 1:]
         y_pred = self.forward(x)

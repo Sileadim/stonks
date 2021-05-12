@@ -66,7 +66,9 @@ class StocksDataset(Dataset):
         else:
             sample = [  d[-self.min_length :] for d in data]
         if self.normalization_func:
-            stacked = np.stack(  [self.normalization_func(array) for array in sample])
+            stacked = np.stack([self.normalization_func(array) for array in sample])
+        else:
+            stacked = np.stack(sample)
         return stacked
 
     def __len__(self):
@@ -134,19 +136,19 @@ class RandomWalkDataset(Dataset):
     
 
 class StocksDataModule(pl.LightningDataModule):
-    def __init__(self, files=FILTERED, train_batch_size=64, val_batch_size=64,min_length=365):
+    def __init__(self, files=FILTERED, train_batch_size=64, val_batch_size=64,min_length=365, columns=["<VOL>","<OPEN>","<HIGH>","<LOW>","<CLOSE>"]):
         super().__init__()
         self.files = files
         self.train_batch_size = 64
         self.val_batch_size = 64
         self.min_length = min_length
-
+        self.columns = columns
     def setup(self, stage):
         pass
 
     def prepare_data(self):
-        self.train_split = StocksDataset(files=self.files[:-200],min_length=self.min_length)
-        self.val_split = StocksDataset(files=self.files[-200:-100],min_length=self.min_length)
+        self.train_split = StocksDataset(files=self.files[:-200],min_length=self.min_length,columns=self.columns)
+        self.val_split = StocksDataset(files=self.files[-200:-100],min_length=self.min_length,columns=self.columns)
 
     def train_dataloader(self):
         return DataLoader(self.train_split, batch_size=self.train_batch_size)
