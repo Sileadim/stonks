@@ -96,15 +96,18 @@ class Transformer(pl.LightningModule):
         )
         return mask
 
-    def __init__(self, hidden_size=256, num_layers=6):
+    def __init__(self, hidden_size=256, num_layers=4,nhead=8):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.encoder_layer = nn.TransformerEncoderLayer(
-            d_model=self.hidden_size, nhead=8
-        )
+
+        self.nhead = nhead
 
         self.positional_encoding = PositionalEncoding(hidden_size=self.hidden_size).double()
+
+        self.encoder_layer = nn.TransformerEncoderLayer(
+            d_model=self.hidden_size, nhead=self.nhead
+        )
         self.transformer_encoder = nn.TransformerEncoder(
             self.encoder_layer, num_layers=num_layers
         ).double()
@@ -146,4 +149,4 @@ class Transformer(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=0.001)
+        return torch.optim.Adam(self.parameters(), lr=0.01)
