@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 import glob
 from torch import Tensor, nn
 import math
-
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 class AutoregressiveLstm(pl.LightningModule):
     def __init__(self, hidden_size=256):
@@ -33,7 +33,7 @@ class AutoregressiveLstm(pl.LightningModule):
     def training_step(self, batch, batch_idx):
 
         x = batch[:, 0:-1]
-        y = batch[:, 1:]
+        y = batch[:, 1]
         y_pred = self.forward(x)
         loss = self.loss_func(y, y_pred)
         self.log(
@@ -56,6 +56,7 @@ class AutoregressiveLstm(pl.LightningModule):
 
 
 class PositionalEncoding(pl.LightningModule):
+
     def __init__(self, hidden_size, dropout=0.1, max_len=1000):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
@@ -74,12 +75,13 @@ class PositionalEncoding(pl.LightningModule):
     def forward(self, x):
 
         batch_size, length = x.shape
-
         positional_encodings = (
             self.pe[:length, : self.hidden_size - 1].view(1, length, -1).repeat(batch_size, 1, 1)
         )
         x = torch.cat((x.view(batch_size, length, -1), positional_encodings), axis=2)
-        return self.dropout(x)
+        #x = torch.cat((x.view(batch_size, length, -1), torch.zeros(length).view(1,length,1).repeat(batch_size,1,self.hidden_size-1).to(self.device)), axis=2)
+
+        return x
 
 
 class Transformer(pl.LightningModule):
@@ -96,20 +98,21 @@ class Transformer(pl.LightningModule):
         )
         return mask
 
-    def __init__(self, hidden_size=256, num_layers=4,nhead=8):
+    def __init__(self, hidden_size=256, num_layers=1,nhead=8,dim_feedforward=256):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
 
         self.nhead = nhead
-
+        self.dim_feedforward = dim_feedforward
         self.positional_encoding = PositionalEncoding(hidden_size=self.hidden_size).double()
 
         self.encoder_layer = nn.TransformerEncoderLayer(
-            d_model=self.hidden_size, nhead=self.nhead
+            d_model=self.hidden_size, nhead=self.nhead,dim_feedforward=self.dim_feedforward
         )
+        self.layer_norm = nn.LayerNorm(self.hidden_size)
         self.transformer_encoder = nn.TransformerEncoder(
-            self.encoder_layer, num_layers=num_layers
+            self.encoder_layer, num_layers=num_layers,norm=self.layer_norm
         ).double()
         self.linear = torch.nn.Linear(self.hidden_size, 1).double()
         self.loss_func = torch.nn.MSELoss()
@@ -121,9 +124,8 @@ class Transformer(pl.LightningModule):
         positionally_encoded = self.positional_encoding(x.double())
         mask = self.generate_square_subsequent_mask(length).to(self.device)
         encoded = self.transformer_encoder(
-            positionally_encoded.view(length, batch_size, self.hidden_size),
-            mask=mask,
-        )
+            positionally_encoded.view(length, batch_size, self.hidden_size),mask=mask
+                    )
         out = self.linear(encoded)
         return out.view(batch_size, length, 1).squeeze(-1)
 
@@ -149,4 +151,11 @@ class Transformer(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=0.01)
+        optimizer=  torch.optim.Adam(self.parameters(), lr=0.001)
+        return {
+            'optimizer': optimizer,
+            'lr_scheduler': {
+                'scheduler': ReduceLROnPlateau(optimizer, patience=5),
+                'monitor': 'train_loss',
+            }
+        }

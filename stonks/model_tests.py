@@ -13,7 +13,7 @@ FILES = list(
 
 FILES = [ f for f in FILES if f not in IGNORE_LIST]
 
-train_dataset = StocksDataset(files=FILES[:10])
+train_dataset = StocksDataset(files=FILES[:10],min_length=30)
 train_dataloader = DataLoader(train_dataset,batch_size=2,shuffle=False)
 
 model = Transformer().double()

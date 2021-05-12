@@ -159,32 +159,3 @@ class StocksDataModule(pl.LightningDataModule):
     def teardown(self):
         pass
 
-
-"""
-
-#%%
-print(len(FILES))
-#%%
-dataset = StocksDataset(files=FILES)
-#%%
-for idx, batch in enumerate(dataset):
-
-
-    pass
-#%%
-##dataset = RandomWalkDataset()
-#
-#plt.plot(dataset[0])
-#plt.show()
-#
-#
-#
-#data_loader = DataLoader(dataset, batch_size=4, shuffle=True)
-#
-#for idx, batch in enumerate(data_loader):
-#    #print(idx,batch.shape)
-#    break
-## %%
-
-# %%
-"""
