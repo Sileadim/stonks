@@ -76,7 +76,7 @@ class PositionalEncoding(pl.LightningModule):
         batch_size, length = x.shape
 
         positional_encodings = (
-            self.pe[:length, : self.hidden_size - 1].view(1, length, -1).repeat(2, 1, 1)
+            self.pe[:length, : self.hidden_size - 1].view(1, length, -1).repeat(batch_size, 1, 1)
         )
         x = torch.cat((x.view(batch_size, length, -1), positional_encodings), axis=2)
         return self.dropout(x)
@@ -104,10 +104,10 @@ class Transformer(pl.LightningModule):
             d_model=self.hidden_size, nhead=8
         )
 
-        self.positional_encoding = PositionalEncoding(hidden_size=self.hidden_size)
+        self.positional_encoding = PositionalEncoding(hidden_size=self.hidden_size).double()
         self.transformer_encoder = nn.TransformerEncoder(
             self.encoder_layer, num_layers=num_layers
-        )
+        ).double()
         self.linear = torch.nn.Linear(self.hidden_size, 1).double()
         self.loss_func = torch.nn.MSELoss()
 
@@ -116,9 +116,10 @@ class Transformer(pl.LightningModule):
         # seq_length,batch_size,
         batch_size, length = x.shape
         positionally_encoded = self.positional_encoding(x.double())
+        mask = self.generate_square_subsequent_mask(length).to(self.device)
         encoded = self.transformer_encoder(
             positionally_encoded.view(length, batch_size, self.hidden_size),
-            mask=self.generate_square_subsequent_mask(length),
+            mask=mask,
         )
         out = self.linear(encoded)
         return out.view(batch_size, length, 1).squeeze(-1)
