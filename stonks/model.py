@@ -33,7 +33,7 @@ class AutoregressiveLstm(pl.LightningModule):
     def training_step(self, batch, batch_idx):
 
         x = batch[:, 0:-1]
-        y = batch[:, 1]
+        y = batch[:, 1:]
         y_pred = self.forward(x)
         loss = self.loss_func(y, y_pred)
         self.log(
