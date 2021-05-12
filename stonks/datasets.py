@@ -36,13 +36,13 @@ class StocksDataset(Dataset):
         files=FILES[:4],
         min_length=365,
         normalization_func=subtract_mean_and_divide_by_std,
-        columns="<CLOSE>",
+        columns=["<VOL>","<OPEN>","<HIGH>","<LOW>","<CLOSE>"],
         sample=True,
     ):
         self.data = []
         self.min_length = min_length
         self.normalization_func = normalization_func
-        self.column = column
+        self.columns = columns
         self.sample = sample
         for p in files:
             try:
@@ -51,25 +51,23 @@ class StocksDataset(Dataset):
                 print(p, e)
                 continue
             if len(d) >= min_length:
-                c = d[self.column]
-                self.data.append((p, c))
+                data = [ np.array(d[c]) for c in self.columns ]
+                self.data.append((p, data))
 
-    def sample_from(self, d):
+    def sample_from(self, data):
 
-        start = np.random.randint(low=0, high=len(d) - self.min_length + 1)
-        return d[start : start + self.min_length]
+        start = np.random.randint(low=0, high=len(data[0]) - self.min_length + 1)
+        return [  d[start : start + self.min_length] for d in data]
 
-    def process_data(self, d):
+    def process_data(self, data):
 
         if self.sample:
-            sample = self.sample_from(d)
+            sample = self.sample_from(data)
         else:
-            sample = d[-self.min_length :]
-        array = np.array(sample)
+            sample = [  d[-self.min_length :] for d in data]
         if self.normalization_func:
-            array = self.normalization_func(array)
-
-        return array
+            stacked = np.stack(  [self.normalization_func(array) for array in sample])
+        return stacked
 
     def __len__(self):
         return len(self.data)

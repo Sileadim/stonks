@@ -10,32 +10,33 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
 class AutoregressiveLstm(pl.LightningModule):
-    def __init__(self, hidden_size=256):
+    def __init__(self, hidden_size=256,n_features=5):
         super().__init__()
         self.hidden_size = hidden_size
+        self.n_features = n_features
         self.encoder = torch.nn.LSTM(
-            input_size=1,
+            input_size=self.n_features,
             hidden_size=self.hidden_size,
             num_layers=2,
             dropout=0.2,
             batch_first=True,
         ).double()
-        self.linear = torch.nn.Linear(self.hidden_size, 1).double()
+        self.linear = torch.nn.Linear(self.hidden_size, self.n_features).double()
         self.loss_func = torch.nn.MSELoss()
         self.save_hyperparameters()
 
     def forward(self, x):
 
         # seq_length,batch_size,
-        batch_size, length = x.shape
-        encoded, _ = self.encoder(x.view(batch_size, length, -1))
-        out = self.linear(encoded).view(batch_size, length)
+        batch_size, n_features, length = x.shape
+        encoded, _ = self.encoder(x.transpose( 2, 1))
+        out = self.linear(encoded).view(batch_size, n_features, length)
         return out
 
     def training_step(self, batch, batch_idx):
 
-        x = batch[:, 0:-1]
-        y = batch[:, 1:]
+        x = batch[:,:, 0:-1]
+        y = batch[:,:, 1:]
         y_pred = self.forward(x)
         loss = self.loss_func(y, y_pred)
         self.log(
@@ -44,8 +45,8 @@ class AutoregressiveLstm(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x = batch[:, 0:-1]
-        y = batch[:, 1:]
+        x = batch[:,:, 0:-1]
+        y = batch[:,:, 1:]
         y_pred = self.forward(x)
         loss = self.loss_func(y, y_pred)
         self.log(
