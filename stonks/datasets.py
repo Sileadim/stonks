@@ -36,7 +36,7 @@ class StocksDataset(Dataset):
         files=FILES[:4],
         min_length=365,
         normalization_func=subtract_mean_and_divide_by_std,
-        column="<CLOSE>",
+        columns="<CLOSE>",
         sample=True,
     ):
         self.data = []

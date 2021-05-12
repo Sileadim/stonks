@@ -1,13 +1,13 @@
 #%%
 from datasets import StocksDataset, FILTERED, DataLoader
-from model import AutoregressiveLstm
+from model import AutoregressiveLstm, Transformer
 from jsonargparse import ArgumentParser
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
 parser = ArgumentParser()
 parser.add_argument("--path",type=str)
-
+parser.add_argument("--type",type=str)
 
 args = parser.parse_args()
 def predict_n_steps(model, array, n_steps=5):
@@ -25,8 +25,11 @@ def predict_n_steps(model, array, n_steps=5):
 
     return predictions
 
-test_dataset = StocksDataset(files=FILTERED[-100:],normalization_func=None)
-model = AutoregressiveLstm.load_from_checkpoint(args.path)
+test_dataset = StocksDataset(files=FILTERED[-100:], normalization_func=None)
+if args.type == "lstm":
+    model = AutoregressiveLstm.load_from_checkpoint(args.path)
+else:
+    model = Transformer.load_from_checkpoint(args.path)
 test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
 #%%
