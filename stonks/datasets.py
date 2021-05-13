@@ -30,18 +30,25 @@ def subtract_mean_and_divide_by_std(array):
     return zero_mean
 
 
+def log_returns(x):
+    return np.log(x[1:]/x[:-1])
+    
 class StocksDataset(Dataset):
     def __init__(
         self,
         files=FILES[:4],
         min_length=365,
-        normalization_func=subtract_mean_and_divide_by_std,
+        normalization="mean_std",
         columns=["<VOL>","<OPEN>","<HIGH>","<LOW>","<CLOSE>"],
         sample=True,
     ):
         self.data = []
         self.min_length = min_length
-        self.normalization_func = normalization_func
+        self.normalization = normalization
+        if self.normalization == "mean_std":
+            self.normalization_func = subtract_mean_and_divide_by_std
+        else:
+            self.normalization_func = log_returns
         self.columns = columns
         self.sample = sample
         for p in files:
