@@ -50,5 +50,14 @@ class Test(unittest.TestCase):
             model.training_step(batch.double(), 0)
             break
 
+    def test_transformer_with_convolution(self):
+        train_dataset = StocksDataset(files=FILES[:10],min_length=30)
+        train_dataloader = DataLoader(train_dataset,batch_size=2,shuffle=False)
+
+        model = Transformer(use_convolutions=True).double()
+        for batch in train_dataloader:
+            model.training_step(batch.double(), 0)
+            break
+
 if __name__ == '__main__':
     unittest.main()

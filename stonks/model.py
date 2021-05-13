@@ -9,13 +9,51 @@ import math
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
-class AutoregressiveLstm(pl.LightningModule):
+class AutoregressiveBase(pl.LightningModule):
+    def __init__(self):
+        super().__init__()
+
+    def training_step(self, batch, batch_idx):
+        # batchsize, n_features, length
+        x = batch[:, :, 0:-1]
+        y = batch[:, :, 1:]
+        y_pred = self.forward(x)
+        loss = self.loss_func(y, y_pred)
+        self.log(
+            "train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        x = batch[:, :, 0:-1]
+        y = batch[:, :, 1:]
+        y_pred = self.forward(x)
+        loss = self.loss_func(y, y_pred)
+        self.log(
+            "val_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
+        return optimizer
+        # return {
+        #    "optimizer": optimizer,
+        #    "lr_scheduler": {
+        #        "scheduler": ReduceLROnPlateau(optimizer, patience=5),
+        #        "monitor": "train_loss",
+        #    },
+        # }
+
+
+class AutoregressiveLstm(AutoregressiveBase):
     def __init__(
         self,
         hidden_size=256,
         n_features=5,
         use_convolutions=False,
         conv_out_features=None,
+        num_layers=2
     ):
         super().__init__()
         self.hidden_size = hidden_size
@@ -25,8 +63,11 @@ class AutoregressiveLstm(pl.LightningModule):
             conv_out_features if conv_out_features else self.n_features
         )
         self.lstm_input_size = n_features
+        self.num_layers = num_layers
         if self.use_convolutions:
-            self.convolutions = ConvolutionalFilters(n_features=self.n_features, out_features=self.conv_out_features).double()
+            self.convolutions = ConvolutionalFilters(
+                n_features=self.n_features, out_features=self.conv_out_features
+            ).double()
             self.lstm_input_size += self.conv_out_features
         self.encoder = torch.nn.LSTM(
             input_size=self.lstm_input_size,
@@ -49,30 +90,6 @@ class AutoregressiveLstm(pl.LightningModule):
         encoded, _ = self.encoder(lstm_input.transpose(2, 1))
         out = self.linear(encoded).view(batch_size, n_features, length)
         return out
-
-    def training_step(self, batch, batch_idx):
-
-        x = batch[:, :, 0:-1]
-        y = batch[:, :, 1:]
-        y_pred = self.forward(x)
-        loss = self.loss_func(y, y_pred)
-        self.log(
-            "train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
-        )
-        return loss
-
-    def validation_step(self, batch, batch_idx):
-        x = batch[:, :, 0:-1]
-        y = batch[:, :, 1:]
-        y_pred = self.forward(x)
-        loss = self.loss_func(y, y_pred)
-        self.log(
-            "val_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
-        )
-        return loss
-
-    def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=0.001)
 
 
 class PositionalEncoding(pl.LightningModule):
@@ -107,7 +124,7 @@ class PositionalEncoding(pl.LightningModule):
         return x
 
 
-class Transformer(pl.LightningModule):
+class Transformer(AutoregressiveBase):
     @staticmethod
     def generate_square_subsequent_mask(sz: int) -> Tensor:
         r"""Generate a square mask for the sequence. The masked positions are filled with float('-inf').
@@ -122,7 +139,15 @@ class Transformer(pl.LightningModule):
         return mask
 
     def __init__(
-        self, hidden_size=256, num_layers=1, nhead=8, dim_feedforward=256, n_features=5
+        self,
+        hidden_size=256,
+        num_layers=1,
+        nhead=8,
+        dim_feedforward=256,
+        n_features=5,
+        use_convolutions=False,
+        conv_out_features=None,
+
     ):
         super().__init__()
         self.hidden_size = hidden_size
@@ -130,6 +155,16 @@ class Transformer(pl.LightningModule):
         self.nhead = nhead
         self.n_features = n_features
         self.dim_feedforward = dim_feedforward
+        self.use_convolutions = use_convolutions
+        self.conv_out_features = (
+            conv_out_features if conv_out_features else self.n_features
+        )
+
+        if self.use_convolutions:
+            self.convolutions = ConvolutionalFilters(
+                n_features=self.n_features, out_features=self.conv_out_features
+            ).double()
+
         self.positional_encoding = PositionalEncoding(
             hidden_size=self.hidden_size
         ).double()
@@ -151,45 +186,19 @@ class Transformer(pl.LightningModule):
 
         # seq_length,batch_size,
         batch_size, n_features, length = x.shape
-        positionally_encoded = self.positional_encoding(x.double())
+
+        if self.use_convolutions:
+            pos_input = self.convolutions(x)
+        else:
+            pos_input = x
+
+        positionally_encoded = self.positional_encoding(pos_input)
         mask = self.generate_square_subsequent_mask(length).to(self.device)
         encoded = self.transformer_encoder(
             positionally_encoded.view(length, batch_size, self.hidden_size), mask=mask
         )
         out = self.linear(encoded)
         return out.view(batch_size, n_features, length)
-
-    def training_step(self, batch, batch_idx):
-        # batchsize, n_features, length
-        x = batch[:, :, 0:-1]
-        y = batch[:, :, 1:]
-        y_pred = self.forward(x)
-        loss = self.loss_func(y, y_pred)
-        self.log(
-            "train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
-        )
-        return loss
-
-    def validation_step(self, batch, batch_idx):
-        x = batch[:, :, 0:-1]
-        y = batch[:, :, 1:]
-        y_pred = self.forward(x)
-        loss = self.loss_func(y, y_pred)
-        self.log(
-            "val_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
-        )
-        return loss
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
-        return optimizer
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": ReduceLROnPlateau(optimizer, patience=5),
-                "monitor": "train_loss",
-            },
-        }
 
 
 class ConvolutionalFilters(pl.LightningModule):

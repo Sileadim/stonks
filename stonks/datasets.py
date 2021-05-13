@@ -139,8 +139,8 @@ class StocksDataModule(pl.LightningDataModule):
     def __init__(self, files=FILTERED, train_batch_size=128, val_batch_size=64,min_length=365, columns=["<VOL>","<OPEN>","<HIGH>","<LOW>","<CLOSE>"]):
         super().__init__()
         self.files = files
-        self.train_batch_size = 64
-        self.val_batch_size = 64
+        self.train_batch_size = train_batch_size
+        self.val_batch_size = val_batch_size
         self.min_length = min_length
         self.columns = columns
     def setup(self, stage):
