@@ -10,12 +10,26 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
 class AutoregressiveLstm(pl.LightningModule):
-    def __init__(self, hidden_size=256,n_features=5):
+    def __init__(
+        self,
+        hidden_size=256,
+        n_features=5,
+        use_convolutions=False,
+        conv_out_features=None,
+    ):
         super().__init__()
         self.hidden_size = hidden_size
         self.n_features = n_features
+        self.use_convolutions = use_convolutions
+        self.conv_out_features = (
+            conv_out_features if conv_out_features else self.n_features
+        )
+        self.lstm_input_size = n_features
+        if self.use_convolutions:
+            self.convolutions = ConvolutionalFilters(n_features=self.n_features, out_features=self.conv_out_features).double()
+            self.lstm_input_size += self.conv_out_features
         self.encoder = torch.nn.LSTM(
-            input_size=self.n_features,
+            input_size=self.lstm_input_size,
             hidden_size=self.hidden_size,
             num_layers=2,
             dropout=0.2,
@@ -27,16 +41,19 @@ class AutoregressiveLstm(pl.LightningModule):
 
     def forward(self, x):
 
-        
         batch_size, n_features, length = x.shape
-        encoded, _ = self.encoder(x.transpose( 2, 1))
+        if self.use_convolutions:
+            lstm_input = self.convolutions(x)
+        else:
+            lstm_input = x
+        encoded, _ = self.encoder(lstm_input.transpose(2, 1))
         out = self.linear(encoded).view(batch_size, n_features, length)
         return out
 
     def training_step(self, batch, batch_idx):
 
-        x = batch[:,:, 0:-1]
-        y = batch[:,:, 1:]
+        x = batch[:, :, 0:-1]
+        y = batch[:, :, 1:]
         y_pred = self.forward(x)
         loss = self.loss_func(y, y_pred)
         self.log(
@@ -45,8 +62,8 @@ class AutoregressiveLstm(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x = batch[:,:, 0:-1]
-        y = batch[:,:, 1:]
+        x = batch[:, :, 0:-1]
+        y = batch[:, :, 1:]
         y_pred = self.forward(x)
         loss = self.loss_func(y, y_pred)
         self.log(
@@ -74,6 +91,7 @@ class PositionalEncoding(pl.LightningModule):
         pe[:, 1::2] = torch.cos(position * div_term)
         # pe = pe.unsqueeze(0).transpose()
         self.register_buffer("pe", pe)
+        self.save_hyperparameters()
 
     def forward(self, x):
 
@@ -83,7 +101,7 @@ class PositionalEncoding(pl.LightningModule):
             .view(1, length, -1)
             .repeat(batch_size, 1, 1)
         )
-        x = torch.cat((x.transpose(2,1), positional_encodings), axis=2)
+        x = torch.cat((x.transpose(2, 1), positional_encodings), axis=2)
         # x = torch.cat((x.view(batch_size, length, -1), torch.zeros(length).view(1,length,1).repeat(batch_size,1,self.hidden_size-1).to(self.device)), axis=2)
 
         return x
@@ -103,7 +121,9 @@ class Transformer(pl.LightningModule):
         )
         return mask
 
-    def __init__(self, hidden_size=256, num_layers=1, nhead=8, dim_feedforward=256, n_features=5):
+    def __init__(
+        self, hidden_size=256, num_layers=1, nhead=8, dim_feedforward=256, n_features=5
+    ):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
@@ -123,7 +143,7 @@ class Transformer(pl.LightningModule):
         self.transformer_encoder = nn.TransformerEncoder(
             self.encoder_layer, num_layers=num_layers, norm=self.layer_norm
         ).double()
-        self.linear = torch.nn.Linear(self.hidden_size,self.n_features ).double()
+        self.linear = torch.nn.Linear(self.hidden_size, self.n_features).double()
         self.loss_func = torch.nn.MSELoss()
         self.save_hyperparameters()
 
@@ -141,8 +161,8 @@ class Transformer(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         # batchsize, n_features, length
-        x = batch[:,:, 0:-1]
-        y = batch[:,:, 1:]
+        x = batch[:, :, 0:-1]
+        y = batch[:, :, 1:]
         y_pred = self.forward(x)
         loss = self.loss_func(y, y_pred)
         self.log(
@@ -151,8 +171,8 @@ class Transformer(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x = batch[:,:, 0:-1]
-        y = batch[:,:, 1:]
+        x = batch[:, :, 0:-1]
+        y = batch[:, :, 1:]
         y_pred = self.forward(x)
         loss = self.loss_func(y, y_pred)
         self.log(
@@ -171,6 +191,55 @@ class Transformer(pl.LightningModule):
             },
         }
 
+
 class ConvolutionalFilters(pl.LightningModule):
-    def __init__(self, n_features=5):
+    def __init__(
+        self,
+        n_features=5,
+        out_features=5,
+        small_kernel_size=5,
+        big_kernel_size=20,
+        pad_type="same",
+    ):
         super().__init__()
+        self.n_features = n_features
+        self.out_features = out_features
+        self.small_kernel_size = small_kernel_size
+        self.big_kernel_size = big_kernel_size
+        self.pad_type = pad_type
+        self.small_filter = torch.nn.Conv1d(
+            self.n_features,
+            self.out_features,
+            self.small_kernel_size,
+            stride=1,
+            padding=0,
+            dilation=1,
+            groups=1,
+            bias=True,
+        )
+        self.big_filter = torch.nn.Conv1d(
+            self.n_features,
+            self.out_features,
+            self.big_kernel_size,
+            stride=1,
+            padding=0,
+            dilation=1,
+            groups=1,
+            bias=True,
+        )
+        self.save_hyperparameters()
+
+    def forward(self, x):
+
+        first_value = x[:, :, 0:1]
+        padded_for_small = torch.cat(
+            (first_value.repeat(1, 1, self.small_kernel_size - 1), x), axis=-1
+        )
+        padded_for_big = torch.cat(
+            (first_value.repeat(1, 1, self.big_kernel_size - 1), x), axis=-1
+        )
+
+        small_filtered = self.small_filter(padded_for_small)
+        big_filtered = self.big_filter(padded_for_big)
+        summed = small_filtered + big_filtered
+        return torch.cat((x, summed), axis=1)

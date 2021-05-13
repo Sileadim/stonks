@@ -136,7 +136,7 @@ class RandomWalkDataset(Dataset):
     
 
 class StocksDataModule(pl.LightningDataModule):
-    def __init__(self, files=FILTERED, train_batch_size=64, val_batch_size=64,min_length=365, columns=["<VOL>","<OPEN>","<HIGH>","<LOW>","<CLOSE>"]):
+    def __init__(self, files=FILTERED, train_batch_size=128, val_batch_size=64,min_length=365, columns=["<VOL>","<OPEN>","<HIGH>","<LOW>","<CLOSE>"]):
         super().__init__()
         self.files = files
         self.train_batch_size = 64
