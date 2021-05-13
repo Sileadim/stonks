@@ -39,7 +39,7 @@ if __name__ == "__main__":
     parser.add_argument("--type", type=str)
 
     args = parser.parse_args()
-    params_dict = load_params(p)
+    params_dict = load_params(args.path)
     test_dataset = StocksDataset(files=FILTERED[-100:], min_length=180,columns=params_dict["data"]["columns"])
 
     if args.type == "lstm":

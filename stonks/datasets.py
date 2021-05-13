@@ -151,10 +151,10 @@ class StocksDataModule(pl.LightningDataModule):
         self.val_split = StocksDataset(files=self.files[-200:-100],min_length=self.min_length,columns=self.columns)
 
     def train_dataloader(self):
-        return DataLoader(self.train_split, batch_size=self.train_batch_size)
+        return DataLoader(self.train_split, batch_size=self.train_batch_size,num_workers=2)
 
     def val_dataloader(self):
-        return DataLoader(self.val_split, batch_size=self.val_batch_size)
+        return DataLoader(self.val_split, batch_size=self.val_batch_size,num_workers=2)
 
     def teardown(self):
         pass
