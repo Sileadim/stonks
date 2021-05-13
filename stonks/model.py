@@ -170,3 +170,7 @@ class Transformer(pl.LightningModule):
                 "monitor": "train_loss",
             },
         }
+
+class ConvolutionalFilters(pl.LightningModule):
+    def __init__(self, n_features=5):
+        super().__init__()

@@ -13,11 +13,11 @@ import warnings
 
 
 IGNORE_LIST = [
-    "/home/cehmann/workspaces/stonks/data/daily/us/nyse stocks/2/zexit.us.txt"
+    "/home/cehmann/projects/stonks/data/daily/us/nyse stocks/2/zexit.us.txt"
 ]
 #%%
 FILES = list(
-    glob.iglob("/home/cehmann/workspaces/stonks/data/daily/us/nyse stocks/*/*txt")
+    glob.iglob("/home/cehmann/projects/stonks/data/daily/us/nyse stocks/*/*txt")
 )
 
 FILTERED = [f for f in FILES if f not in IGNORE_LIST]
