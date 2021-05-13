@@ -1,5 +1,6 @@
 #%%
 from jsonargparse.util import change_to_path_dir
+from torch.nn.modules import normalization
 from datasets import StocksDataset, FILTERED, DataLoader
 from model import AutoregressiveLstm, Transformer
 from jsonargparse import ArgumentParser
@@ -9,7 +10,8 @@ import matplotlib.pyplot as plt
 import yaml
 import os
 import matplotlib
-matplotlib.use( 'tkagg' )
+
+matplotlib.use("tkagg")
 
 
 def predict_n_steps(model, array, n_steps=5):
@@ -31,7 +33,6 @@ def load_params(p):
     return params_dict
 
 
-
 if __name__ == "__main__":
 
     parser = ArgumentParser()
@@ -40,7 +41,12 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     params_dict = load_params(args.path)
-    test_dataset = StocksDataset(files=FILTERED[-100:], min_length=180,columns=params_dict["data"]["columns"])
+    test_dataset = StocksDataset(
+        files=FILTERED[-100:],
+        min_length=180,
+        columns=params_dict["data"]["columns"],
+        normalization=params_dict["data"]["normalization"],
+    )
 
     if args.type == "lstm":
         model = AutoregressiveLstm.load_from_checkpoint(args.path)
@@ -50,7 +56,9 @@ if __name__ == "__main__":
     for batch in test_dataloader:
         minus_last_ten = batch[:, :, 0:-10]
         normed = batch
-        predictions = predict_n_steps(model, minus_last_ten, n_steps=10).detach().numpy()
+        predictions = (
+            predict_n_steps(model, minus_last_ten, n_steps=10).detach().numpy()
+        )
 
         for i, name in enumerate(params_dict["data"]["columns"]):
             plt.plot(normed[0, i, :], color="blue")

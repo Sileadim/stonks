@@ -12,9 +12,7 @@ import warnings
 import warnings
 
 
-IGNORE_LIST = [
-    "/home/cehmann/projects/stonks/data/daily/us/nyse stocks/2/zexit.us.txt"
-]
+IGNORE_LIST = ["/home/cehmann/projects/stonks/data/daily/us/nyse stocks/2/zexit.us.txt"]
 #%%
 FILES = list(
     glob.iglob("/home/cehmann/projects/stonks/data/daily/us/nyse stocks/*/*txt")
@@ -31,15 +29,16 @@ def subtract_mean_and_divide_by_std(array):
 
 
 def log_returns(x):
-    return np.log(x[1:]/x[:-1])
-    
+    return np.log(x[1:] / x[:-1])
+
+
 class StocksDataset(Dataset):
     def __init__(
         self,
         files=FILES[:4],
         min_length=365,
         normalization="mean_std",
-        columns=["<VOL>","<OPEN>","<HIGH>","<LOW>","<CLOSE>"],
+        columns=["<VOL>", "<OPEN>", "<HIGH>", "<LOW>", "<CLOSE>"],
         sample=True,
     ):
         self.data = []
@@ -58,20 +57,20 @@ class StocksDataset(Dataset):
                 print(p, e)
                 continue
             if len(d) >= min_length:
-                data = [ np.array(d[c]) for c in self.columns ]
+                data = [np.array(d[c]) for c in self.columns]
                 self.data.append((p, data))
 
     def sample_from(self, data):
 
         start = np.random.randint(low=0, high=len(data[0]) - self.min_length + 1)
-        return [  d[start : start + self.min_length] for d in data]
+        return [d[start : start + self.min_length] for d in data]
 
     def process_data(self, data):
 
         if self.sample:
             sample = self.sample_from(data)
         else:
-            sample = [  d[-self.min_length :] for d in data]
+            sample = [d[-self.min_length :] for d in data]
         if self.normalization_func:
             stacked = np.stack([self.normalization_func(array) for array in sample])
         else:
@@ -140,29 +139,49 @@ class RandomWalkDataset(Dataset):
             array = self.normalization_func(array)
         return array
 
-    
 
 class StocksDataModule(pl.LightningDataModule):
-    def __init__(self, files=FILTERED, train_batch_size=128, val_batch_size=64,min_length=365, columns=["<VOL>","<OPEN>","<HIGH>","<LOW>","<CLOSE>"]):
+    def __init__(
+        self,
+        files=FILTERED,
+        train_batch_size=128,
+        val_batch_size=64,
+        min_length=365,
+        columns=["<VOL>", "<OPEN>", "<HIGH>", "<LOW>", "<CLOSE>"],
+        normalization="mean_std",
+    ):
         super().__init__()
         self.files = files
         self.train_batch_size = train_batch_size
         self.val_batch_size = val_batch_size
         self.min_length = min_length
         self.columns = columns
+        self.normalization = normalization
+
     def setup(self, stage):
         pass
 
     def prepare_data(self):
-        self.train_split = StocksDataset(files=self.files[:-200],min_length=self.min_length,columns=self.columns)
-        self.val_split = StocksDataset(files=self.files[-200:-100],min_length=self.min_length,columns=self.columns)
+        self.train_split = StocksDataset(
+            files=self.files[:-200],
+            min_length=self.min_length,
+            columns=self.columns,
+            normalization=self.normalization,
+        )
+        self.val_split = StocksDataset(
+            files=self.files[-200:-100],
+            min_length=self.min_length,
+            columns=self.columns,
+            normalization=self.normalization,
+        )
 
     def train_dataloader(self):
-        return DataLoader(self.train_split, batch_size=self.train_batch_size,num_workers=2)
+        return DataLoader(
+            self.train_split, batch_size=self.train_batch_size, num_workers=2
+        )
 
     def val_dataloader(self):
-        return DataLoader(self.val_split, batch_size=self.val_batch_size,num_workers=2)
+        return DataLoader(self.val_split, batch_size=self.val_batch_size, num_workers=2)
 
     def teardown(self):
         pass
-
