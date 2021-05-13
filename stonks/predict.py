@@ -38,7 +38,8 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--path", type=str)
     parser.add_argument("--type", type=str)
-
+    parser.add_argument("--predict_n_steps", type=int, default=10)
+    parser.add_argument("--show_last_n_steps", type=int, default=30)
     args = parser.parse_args()
     params_dict = load_params(args.path)
     test_dataset = StocksDataset(
@@ -54,19 +55,18 @@ if __name__ == "__main__":
         model = Transformer.load_from_checkpoint(args.path)
     test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
     for batch in test_dataloader:
-        minus_last_ten = batch[:, :, 0:-10]
+        minus_last_ten = batch[:, :, 0:-args.predict_n_steps]
         normed = batch
         predictions = (
-            predict_n_steps(model, minus_last_ten, n_steps=10).detach().numpy()
+            predict_n_steps(model, minus_last_ten, n_steps=args.predict_n_steps)
+            .detach()
+            .numpy()
         )
 
         for i, name in enumerate(params_dict["data"]["columns"]):
-            plt.plot(normed[0, i, :], color="blue")
+            plt.plot(normed[0, i, -args.show_last_n_steps :], color="blue")
             plt.plot(
-                predictions[
-                    0,
-                    i,
-                ],
+                predictions[0, i, -args.show_last_n_steps :],
                 color="red",
             )
             plt.title(name)
