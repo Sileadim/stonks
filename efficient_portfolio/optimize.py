@@ -28,8 +28,6 @@ def volatility(weights, returns_annual, covariance):
     return v
 
 
-
-
 def negative_sharp_ratio(r, v, risk_free_rate=0.008):
     return -sharp_ratio(r, v, risk_free_rate=risk_free_rate)
 

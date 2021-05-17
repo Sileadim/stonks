@@ -50,7 +50,7 @@ def load_data():
     return df, market_cap
 
 
-def get_max_sharp_allocation(df, start,end=None):
+def get_max_sharp_allocation(df, start, end=None):
     
     annual_returns, annual_cov = get_annual_returns_and_covariances(df, start, end)
     max_sr_weights = maxSR(annual_returns, annual_cov).x
@@ -58,15 +58,14 @@ def get_max_sharp_allocation(df, start,end=None):
     return get_allocation(max_sr_weights, annual_returns), sharp_ratio(r,v)
 
 
-def get_weekly_allocations(df, coins):
+def get_allocations(df, coins):
     date_and_allocation = []
     if coins:
         for c in df.columns:
             if c not in coins:
                 del df[c]
-
-    for last_n_weeks in range(len(df),len(df)-1,-1):
-        cut_df = df.iloc[:last_n_weeks-1]
+    for last_n_weeks in [len(df),len(df)-52]:
+        cut_df = df.iloc[:last_n_weeks]
         date = df.index[last_n_weeks-1]
         print("Allocation timestamp: ", date)
         allocation, sharp = get_max_sharp_allocation(cut_df, -52, None )
@@ -78,23 +77,31 @@ def get_weekly_allocations(df, coins):
 
 def get_actual_returns(df, allocation):
     pct_changes = df.iloc[-52:].pct_change().iloc[1:]
-
-    for c in  pct_changes.columns:
+    for c in pct_changes.columns:
         if c not in allocation.index: 
             del pct_changes[c]
+    pct_changes = pct_changes.reindex(sorted(pct_changes.columns), axis=1)
     return allocation.T @ pct_changes.T
 
-def plot_returns(all_returns):
-    start = 100
+def plot_returns(all_returns,title=""):
     values = (all_returns +1).cumprod(axis=1)
     plt.plot(values.T)
+    plt.title(title)
+    #plt.yticks(ticks=range(0,int(np.array(values).max())+1))
+    print(values.max(axis=1))
     plt.show()
+    
     
 if __name__=="__main__":
 
+#%%
     df, market_cap = load_data()
     biggest_by_market_cap = list(market_cap.iloc[-1].dropna().sort_values(ascending=False)[:40].index)
-    date_and_allocations = get_weekly_allocations(df, biggest_by_market_cap)
-    all_returns = get_actual_returns(df, date_and_allocations[0][1])
-    plot_returns(all_returns)
-    
+    date_and_allocations = get_allocations(copy.deepcopy(df), biggest_by_market_cap)
+    returns_current_allocation = get_actual_returns(copy.deepcopy(df), date_and_allocations[0][1])
+    plot_returns(returns_current_allocation,title="This years portfolio")
+    returns_last_years_allocation = get_actual_returns(copy.deepcopy(df), date_and_allocations[-1][1])
+    plot_returns(returns_last_years_allocation,"Last years best portfolio")
+    biggest = market_cap.iloc[-52].dropna().sort_values(ascending=False)[:40]
+    market_cap_returns = get_actual_returns(copy.deepcopy(df), (biggest / biggest.sum()).to_frame()  )
+    plot_returns(market_cap_returns,"Market cap")
