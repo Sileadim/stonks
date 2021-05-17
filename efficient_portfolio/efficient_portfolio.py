@@ -65,34 +65,29 @@ def get_weekly_allocations(df, coins):
             if c not in coins:
                 del df[c]
 
-    for last_n_weeks in range(-1, -52, -1):
-        date_and_allocation = []
-        cut_df = df.iloc[:last_n_weeks]
-        date = df.index[last_n_weeks]
+    for last_n_weeks in range(len(df),len(df)-1,-1):
+        cut_df = df.iloc[:last_n_weeks-1]
+        date = df.index[last_n_weeks-1]
         print("Allocation timestamp: ", date)
-        allocation, sharp = get_max_sharp_allocation(cut_df, -52,None )
+        allocation, sharp = get_max_sharp_allocation(cut_df, -52, None )
         print("Sharp: ",sharp)
         print(allocation)
         date_and_allocation.append((date,allocation))
 
-    return date_and_allocations
-    
-def get_actual_returns(df, allocations):
-    pct_changes = df.pct_change()
-    all_returns = []
-    for date, a in allocations:
-        real_changes = copy.deepcopy(pct_changes.loc[date])
-        pct_returns = pd.concat([a,real_changes],axis=1).dropna().cumprod(axis=1).sum().iloc[-1]
-        all_returns.append(pct_returns)
-    return all_returns
+    return date_and_allocation
+
+def get_actual_returns(df, allocation):
+    pct_changes = df.iloc[-52:].pct_change().iloc[1:]
+
+    for c in  pct_changes.columns:
+        if c not in allocation.index: 
+            del pct_changes[c]
+    return allocation.T @ pct_changes.T
 
 def plot_returns(all_returns):
     start = 100
-    values = [start]
-    for r in all_returns[::-1]:
-        start *= (1+r)
-        values.append(start)
-    plt.plot(values)
+    values = (all_returns +1).cumprod(axis=1)
+    plt.plot(values.T)
     plt.show()
     
 if __name__=="__main__":
@@ -100,6 +95,6 @@ if __name__=="__main__":
     df, market_cap = load_data()
     biggest_by_market_cap = list(market_cap.iloc[-1].dropna().sort_values(ascending=False)[:40].index)
     date_and_allocations = get_weekly_allocations(df, biggest_by_market_cap)
-    all_returns = get_actual_returns(df, date_and_allocations)
+    all_returns = get_actual_returns(df, date_and_allocations[0][1])
     plot_returns(all_returns)
     
