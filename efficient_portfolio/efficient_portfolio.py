@@ -2,11 +2,11 @@ import json
 import pandas as pd
 from collections import defaultdict
 import matplotlib.pyplot as plt
-import seaborn as sns
 import numpy as np
 from scipy.optimize import minimize
 import copy
-
+from optimize import get_efficient_weights, get_returns_and_volatility,maxSR
+from utils import get_allocation,get_annual_returns_and_covariances,get_returns_and_volatility,sharp_ratio
 
 DELETE_LIST = [
     "UNUS SED LEO",
@@ -47,156 +47,59 @@ def load_data():
         if is_stable[c] or c in DELETE_LIST:
             del df[c]
             del market_cap[c]
+    return df, market_cap
 
 
-def get_coins_by_market_cap(market_cap):
-    return market_cap.iloc[-1].dropna().sort_values(ascending=False)[:40].index
-
-
-def get_returns_and_volatility(returns_annual, weights, covariance):
-
-    returns = weights @ returns_annual
-    volatility = np.sqrt(weights.T @ (covariance @ weights)) * np.sqrt(52)
-    return returns, volatility
-
-
-def get_allocation(weights, meanReturns):
-    allocation = pd.DataFrame(
-        weights, index=copy.deepcopy(meanReturns.index), columns=["allocation"]
-    )
-    # allocation["allocation"]  = [round(i*100,0) for i in allocation["allocation"]]
-    return allocation[allocation["allocation"] >= 0.001]
-
-
-def get_random_weights(n):
-
-    weights = np.random.random(n)
-    weights /= np.sum(weights)
-    return weights
-
-
-def negative_return(weights, returns_annual, covariance):
-    r, v = get_returns_and_volatility(returns_annual, weights, covariance)
-    return -r
-
-
-def positive_return(weights, returns_annual, covariance):
-    r, v = get_returns_and_volatility(returns_annual, weights, covariance)
-    return r
-
-
-def volatility(weights, returns_annual, covariance):
-
-    r, v = get_returns_and_volatility(returns_annual, weights, covariance)
-    return v
-
-
-# risk free rate from germany https://www.statista.com/statistics/885915/average-risk-free-rate-select-countries-europe/
-def sharp_ratio(r, v, risk_free_rate=0.008):
-    return (r - risk_free_rate) / v
-
-
-def negative_sharp_ratio(r, v, risk_free_rate=0.008):
-    return -sharp_ratio(r, v, risk_free_rate=risk_free_rate)
-
-
-# need to put weights in front for optimizer
-def negative_sharp_of_portfolio(weights, returns_annual, covariance, risk_free_rate):
-    r, v = get_returns_and_volatility(returns_annual, weights, covariance)
-    return negative_sharp_ratio(r, v, risk_free_rate=risk_free_rate)
-
-
-
-
-def get_actual_returns(df, allocations):
-    pct_changes = df.pct_change()
-    all_returns = []
-    for date, a in allocations:
-        real_changes = copy.deepcopy(pct_changes.loc[date])
-        #print(real_changes)
-        #print(real_changes[a.index])
-        pct_returns = pd.concat([a,real_changes],axis=1).dropna().cumprod(axis=1).sum().iloc[-1]
-        all_returns.append(pct_returns)
-    return all_returns
-
-
-
-def get_annual_returns_and_covariances(df, start_index, end_index,drop_na=True,coins=None):
-      
-    if end_index:
-        timeframe = df.iloc[start_index:end_index]
-    else:
-        timeframe = df.iloc[start_index:]
-    if coins:
-        for c in timeframe.columns:
-            if c not in coins:
-                del timeframe[c]
-    if drop_na:
-        timeframe = timeframe.dropna(axis=1, how="any")
-    returns_weekly = timeframe.pct_change()
-    returns_annual = returns_weekly.mean() * len(timeframe)
-    cov_weekly = returns_weekly.cov()
-    cov_annual = cov_weekly * len(timeframe)
-    return returns_annual,cov_annual
-
-def calculate_best_portfolio_for_timeframe(df, start_index, end_index=None):
+def get_max_sharp_allocation(df, start,end=None):
     
-    annual_returns, annual_cov = get_annual_returns_and_covariances(df, start_index, end_index)
-    weights = maxSR(annual_returns, annual_cov).x
-    r,v = get_returns_and_volatility(annual_returns, weights, annual_cov)
-    allocation = get_allocation(weights,annual_returns)
-    print(allocation)
-
-def calculate_efficient_frontier_for_timeframe(df, start_index, end_index=None):
-    
-    
-    annual_returns, annual_cov = get_annual_returns_and_covariances(df, start_index, end_index)
-    efficient_weights = get_efficient_weights(annual_returns, annual_cov)
-    
-    max_sharp_allocation = None
-    sharp = -np.inf
-    for weights in efficient_weights:
-        r,v = get_returns_and_volatility(annual_returns, weights, annual_cov)
-        allocation = get_allocation(weights,annual_returns)
-        if r/v > sharp:
-            sharp = r/v
-            max_sharp_allocation = allocation
-        #print(allocation)
-    return sharp, max_sharp_allocation
+    annual_returns, annual_cov = get_annual_returns_and_covariances(df, start, end)
+    max_sr_weights = maxSR(annual_returns, annual_cov).x
+    r,v = get_returns_and_volatility(annual_returns, max_sr_weights, annual_cov)
+    return get_allocation(max_sr_weights, annual_returns), sharp_ratio(r,v)
 
 
-
-def get_max_sharp_allocations(df, start_and_end):
-    
-    max_sharp_allocations = []
-    sharps = []
-    for start,end in start_and_end:
-        print(start,end)
-        sharp,allocation = calculate_efficient_frontier_for_timeframe(df, start,end_index=end)
-        max_sharp_allocations.append(allocation)
-        sharps.append(sharp)
-    return max_sharp_allocations, sharps
-
-
-def get_weightened_allocation(df,coins=[]):
-    
+def get_weekly_allocations(df, coins):
+    date_and_allocation = []
     if coins:
         for c in df.columns:
             if c not in coins:
                 del df[c]
 
-    max_sharp_allocations, sharps = get_max_sharp_allocations(df,[(-52,None)] )
-    weights = [1]
-    weighted_allocations = [ m*w for m,w in zip(max_sharp_allocations, weights)]
-    summed = pd.concat(weighted_allocations, axis=1).sum(axis=1) 
-    normed =   summed / summed.sum()
-    below_1_percent = normed[normed >= 0.01] 
-    renormed = below_1_percent / below_1_percent.sum()
-    return renormed, sharps[0]
+    for last_n_weeks in range(-1, -52, -1):
+        date_and_allocation = []
+        cut_df = df.iloc[:last_n_weeks]
+        date = df.index[last_n_weeks]
+        print("Allocation timestamp: ", date)
+        allocation, sharp = get_max_sharp_allocation(cut_df, -52,None )
+        print("Sharp: ",sharp)
+        print(allocation)
+        date_and_allocation.append((date,allocation))
 
+    return date_and_allocations
+    
+def get_actual_returns(df, allocations):
+    pct_changes = df.pct_change()
+    all_returns = []
+    for date, a in allocations:
+        real_changes = copy.deepcopy(pct_changes.loc[date])
+        pct_returns = pd.concat([a,real_changes],axis=1).dropna().cumprod(axis=1).sum().iloc[-1]
+        all_returns.append(pct_returns)
+    return all_returns
 
-
+def plot_returns(all_returns):
+    start = 100
+    values = [start]
+    for r in all_returns[::-1]:
+        start *= (1+r)
+        values.append(start)
+    plt.plot(values)
+    plt.show()
+    
 if __name__=="__main__":
 
-
-all_returns = get_actual_returns(df, date_and_prediction)
+    df, market_cap = load_data()
+    biggest_by_market_cap = list(market_cap.iloc[-1].dropna().sort_values(ascending=False)[:40].index)
+    date_and_allocations = get_weekly_allocations(df, biggest_by_market_cap)
+    all_returns = get_actual_returns(df, date_and_allocations)
+    plot_returns(all_returns)
+    
