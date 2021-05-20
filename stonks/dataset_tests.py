@@ -1,10 +1,10 @@
 #%%
-from datasets import StocksDataset, IGNORE_LIST
+from datasets import StocksDataset, IGNORE_LIST, CryptoDataset
 import torch
 from torch.utils.data import DataLoader
 import glob
 import unittest
-
+import pandas as pd
 
 FILES = sorted(list(
     glob.iglob("data/daily/us/nyse stocks/*/*txt")
@@ -26,6 +26,16 @@ class Test(unittest.TestCase):
         for batch in dataloader:
             self.assertEqual(batch.shape, torch.Size([1,5,3]))
             break
+
+class CryptoTest(unittest.TestCase):
+
+    def test_crypto(self):
+
+        path = "data/5 min/world/cryptocurrencies/bts.v.txt"
+        df = pd.read_csv(path)
+        dataset = CryptoDataset(dfs=[df.iloc[:-2000].reset_index()])
+        print(dataset[0])
+
 
 
 if __name__ == '__main__':

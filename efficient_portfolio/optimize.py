@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import minimize
 import copy
-from utils import get_annual_returns_and_covariances, get_allocation, get_returns_and_volatility,sharp_ratio
+from .utils import get_annual_returns_and_covariances, get_allocation, get_returns_and_volatility,sharp_ratio
 
 
 

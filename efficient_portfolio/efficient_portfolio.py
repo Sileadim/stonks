@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import minimize
 import copy
-from optimize import get_efficient_weights, get_returns_and_volatility,maxSR
-from utils import get_allocation,get_annual_returns_and_covariances,get_returns_and_volatility,sharp_ratio
+from .optimize import get_efficient_weights, get_returns_and_volatility,maxSR
+from .utils import get_allocation,get_annual_returns_and_covariances,get_returns_and_volatility,sharp_ratio
 
 DELETE_LIST = [
     "UNUS SED LEO",
@@ -88,7 +88,7 @@ def plot_returns(all_returns,title=""):
     plt.plot(values.T)
     plt.title(title)
     #plt.yticks(ticks=range(0,int(np.array(values).max())+1))
-    print(values.max(axis=1))
+    print("End value: ", np.array(values)[0,-1])
     plt.show()
     
     

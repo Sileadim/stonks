@@ -185,3 +185,99 @@ class StocksDataModule(pl.LightningDataModule):
 
     def teardown(self):
         pass
+
+
+class CryptoDataset(Dataset):
+    @staticmethod
+    def df_to_np(df):
+
+        array = np.expand_dims(np.array(df["<CLOSE>"].pct_change())[1:], 0)
+        return array
+
+    def __init__(self, dfs, sample_length=1000):
+        self.dfs = dfs
+        self.sample_length = sample_length
+        self.data = []
+        self.filtered = []
+        for df in self.dfs:
+            ok = False
+            try:
+                array = self.df_to_np(df)
+                if array.shape[1] >= self.sample_length:
+                    self.data.append(array)
+                    ok = True
+            except:
+                pass
+            if not ok:
+                self.filtered.append(df)
+
+    def sample_from(self, data):
+
+        start = np.random.randint(low=0, high=data.shape[1] - self.sample_length + 1)
+        return data[:, start : start + self.sample_length]
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        sample = self.data[idx]
+        try:
+            processed = self.sample_from(sample)
+        except RuntimeWarning as w:
+            raise w
+        return processed
+
+
+class StocksDataModule(pl.LightningDataModule):
+    def __init__(
+        self,
+        files=FILTERED,
+        train_batch_size=32,
+        val_batch_size=1,
+        sample_length=1000,
+        # columns= ["<VOL>", "<OPEN>", "<HIGH>", "<LOW>", "<CLOSE>"],
+        # normalization="mean_std",
+    ):
+        super().__init__()
+        self.files = files
+        self.train_batch_size = train_batch_size
+        self.val_batch_size = val_batch_size
+        self.sample_length = sample_length
+        self.train_dfs = []
+        self.val_dfs = []
+        self.split_samples()
+
+    def split_samples(self):
+        for f in self.files:
+            try:
+                df = pd.read_csv(f)
+                train_df = df.iloc[: -2 * self.sample_lengt]
+                val_df = df.iloc[-2 * self.sample_length : -3 * self.sample_length]
+                self.train_dfs.append(train_df)
+                self.val_dfs.append(val_df)
+            except:
+                pass
+
+    def setup(self, stage):
+        pass
+
+    def prepare_data(self):
+        self.train_split = CryptoDataset(
+            dfs=self.train_dfs,
+            sample_length=self.sample_length,
+        )
+        self.val_split = StocksDataset(
+            dfs=self.val_dfs,
+            sample_length=self.sample_length,
+        )
+
+    def train_dataloader(self):
+        return DataLoader(
+            self.train_split, batch_size=self.train_batch_size, num_workers=2
+        )
+
+    def val_dataloader(self):
+        return DataLoader(self.val_split, batch_size=self.val_batch_size, num_workers=2)
+
+    def teardown(self):
+        pass
