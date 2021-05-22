@@ -203,17 +203,18 @@ class CryptoDataset(Dataset):
             ok = False
             try:
                 array = self.df_to_np(df)
-                if array.shape[1] >= self.sample_length:
+                if array.shape[1] >= self.sample_length-1:
                     self.data.append(array)
                     ok = True
-            except:
+            except Exception as e:
+                raise(e)
                 pass
             if not ok:
                 self.filtered.append(df)
 
     def sample_from(self, data):
 
-        start = np.random.randint(low=0, high=data.shape[1] - self.sample_length + 1)
+        start = np.random.randint(low=0, high=data.shape[1] - self.sample_length + 2)
         return data[:, start : start + self.sample_length]
 
     def __len__(self):
@@ -228,10 +229,10 @@ class CryptoDataset(Dataset):
         return processed
 
 
-class StocksDataModule(pl.LightningDataModule):
+class CryptoDataModule(pl.LightningDataModule):
     def __init__(
         self,
-        files=FILTERED,
+        files=["/home/cehmann/workspaces/stonks/data/5 min/world/cryptocurrencies/bts.v.txt"],
         train_batch_size=32,
         val_batch_size=1,
         sample_length=1000,
@@ -251,23 +252,25 @@ class StocksDataModule(pl.LightningDataModule):
         for f in self.files:
             try:
                 df = pd.read_csv(f)
-                train_df = df.iloc[: -2 * self.sample_lengt]
-                val_df = df.iloc[-2 * self.sample_length : -3 * self.sample_length]
+                train_df = df.iloc[: -2 * self.sample_length].reset_index()
+                val_df = df.iloc[-2 * self.sample_length : -self.sample_length].reset_index()
                 self.train_dfs.append(train_df)
                 self.val_dfs.append(val_df)
-            except:
+            except Exception as e:
+                raise(e)
                 pass
 
     def setup(self, stage):
         pass
 
     def prepare_data(self):
+
         self.train_split = CryptoDataset(
-            dfs=self.train_dfs,
+            self.train_dfs,
             sample_length=self.sample_length,
         )
-        self.val_split = StocksDataset(
-            dfs=self.val_dfs,
+        self.val_split = CryptoDataset(
+            self.val_dfs,
             sample_length=self.sample_length,
         )
 

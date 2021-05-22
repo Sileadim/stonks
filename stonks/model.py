@@ -37,10 +37,10 @@ class AutoregressiveBase(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
         return optimizer
-        # return {
+        #return {
         #    "optimizer": optimizer,
         #    "lr_scheduler": {
-        #        "scheduler": ReduceLROnPlateau(optimizer, patience=5),
+        #        "scheduler": ReduceLROnPlateau(optimizer, patience=50),
         #        "monitor": "train_loss",
         #    },
         # }
@@ -50,7 +50,7 @@ class AutoregressiveLstm(AutoregressiveBase):
     def __init__(
         self,
         hidden_size=256,
-        n_features=5,
+        n_features=1,
         use_convolutions=False,
         conv_out_features=None,
         num_layers=2
